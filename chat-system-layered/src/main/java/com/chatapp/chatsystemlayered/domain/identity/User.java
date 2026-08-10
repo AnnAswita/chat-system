@@ -3,6 +3,7 @@ package com.chatapp.chatsystemlayered.domain.identity;
 public class User {
     private final String id;
     private final String username;
+
     private UserStatus status;
 
     public User(String id, String username) {

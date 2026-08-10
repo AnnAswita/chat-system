@@ -1,0 +1,56 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: chat-system-layered
+
+  datasource:
+    url: jdbc:h2:mem:chatdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+
+  websocket:
+    message-broker:
+      application-destination-prefix: /app
+      stomp-endpoints: /ws-chat
+      allowed-origins: "*"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: ["prometheus", "metrics", "health", "info"]
+
+  metrics:
+    enable:
+      all: true
+
+  endpoint:
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+
+logging:
+  level:
+    root: INFO
+    org.springframework.web: INFO
+    org.springframework.messaging: INFO
+    com.chatapp.layered: DEBUG
+
+jwt:
+  secret: "your-super-secret-key-change-this"
+  expiration: 3600000   # 1 hour
+
+chat:
+  message:
+    max-size: 256
+  rooms:
+    max-count: 100

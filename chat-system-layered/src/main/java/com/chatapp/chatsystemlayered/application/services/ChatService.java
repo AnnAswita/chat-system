@@ -8,34 +8,73 @@ import com.chatapp.chatsystemlayered.domain.chat.Message;
 import com.chatapp.chatsystemlayered.domain.chat.MessageContent;
 import com.chatapp.chatsystemlayered.domain.repository.ChatRepository;
 import com.chatapp.chatsystemlayered.infrastructure.logging.LoggingService;
-import com.chatapp.chatsystemlayered.infrastructure.monitoring.MetricsCollector;
 import com.chatapp.chatsystemlayered.presentation.dto.ChatMessageDTO;
 import org.springframework.stereotype.Service;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.Counter;
 
 import java.time.Instant;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class ChatService {
+
     private final ChatRepository chatRepository;
     private final MessagingService messagingService;
     private final LoggingService loggingService;
-    private final MetricsCollector metricsCollector;
+
+    // Micrometer metrics
+    private final Timer joinRoomLatency;
+    private final Timer leaveRoomLatency;
+    private final Timer sendMessageLatency;
+    private final Timer getMessagesLatency;
+
+    private final Counter messageThroughput;
 
     public ChatService(ChatRepository chatRepository,
                        MessagingService messagingService,
                        LoggingService loggingService,
-                       MetricsCollector metricsCollector) {
+                       MeterRegistry meterRegistry) {
 
         this.chatRepository = chatRepository;
         this.messagingService = messagingService;
         this.loggingService = loggingService;
-        this.metricsCollector = metricsCollector;
+
+        // Timers
+        this.joinRoomLatency = Timer.builder("chat.joinRoom.latency")
+                .publishPercentileHistogram()
+                .publishPercentiles(0.5, 0.95, 0.99)
+                .register(meterRegistry);
+
+        this.leaveRoomLatency = Timer.builder("chat.leaveRoom.latency")
+                .publishPercentileHistogram()
+                .publishPercentiles(0.5, 0.95, 0.99)
+                .register(meterRegistry);
+
+        this.sendMessageLatency = Timer.builder("chat.sendMessage.latency")
+                .publishPercentileHistogram()
+                .publishPercentiles(0.5, 0.95, 0.99)
+                .register(meterRegistry);
+
+        this.getMessagesLatency = Timer.builder("chat.getMessages.latency")
+                .publishPercentileHistogram()
+                .publishPercentiles(0.5, 0.95, 0.99)
+                .register(meterRegistry);
+
+        // Throughput counter
+        this.messageThroughput = Counter.builder("chat.message.throughput")
+                .description("Number of messages processed")
+                .register(meterRegistry);
+    }
+    public void createRoom(String roomId) {
+        chatRepository.save(new ChatRoom(roomId));
     }
 
     public void joinRoom(JoinRoomCommand command) {
-        long start = System.currentTimeMillis();
+        long start = System.nanoTime();
 
         ChatRoom room = chatRepository.findById(command.getRoomId())
                 .orElseGet(() -> new ChatRoom(command.getRoomId()));
@@ -46,11 +85,11 @@ public class ChatService {
         loggingService.logEvent("UserJoinedRoom",
                 "User " + command.getUserId() + " joined room " + command.getRoomId());
 
-        metricsCollector.recordLatency("joinRoom.latency", System.currentTimeMillis() - start);
+        joinRoomLatency.record(System.nanoTime() - start, TimeUnit.NANOSECONDS);
     }
 
     public void leaveRoom(String roomId, String userId) {
-        long start = System.currentTimeMillis();
+        long start = System.nanoTime();
 
         chatRepository.findById(roomId).ifPresent(room -> {
             room.removeParticipant(userId);
@@ -60,11 +99,11 @@ public class ChatService {
         loggingService.logEvent("UserLeftRoom",
                 "User " + userId + " left room " + roomId);
 
-        metricsCollector.recordLatency("leaveRoom.latency", System.currentTimeMillis() - start);
+        leaveRoomLatency.record(System.nanoTime() - start, TimeUnit.NANOSECONDS);
     }
 
     public void sendMessage(SendMessageCommand command) {
-        long start = System.currentTimeMillis();
+        long start = System.nanoTime();
 
         ChatRoom room = chatRepository.findById(command.getRoomId())
                 .orElseThrow(() -> new IllegalArgumentException("Room not found"));
@@ -85,11 +124,15 @@ public class ChatService {
 
         messagingService.sendToRoom(room.getId(), message);
 
-        metricsCollector.recordLatency("sendMessage.latency", System.currentTimeMillis() - start);
+        // Throughput
+        messageThroughput.increment();
+
+        // Latency
+        sendMessageLatency.record(System.nanoTime() - start, TimeUnit.NANOSECONDS);
     }
 
     public List<ChatMessageDTO> getMessages(GetMessagesQuery query) {
-        long start = System.currentTimeMillis();
+        long start = System.nanoTime();
 
         List<ChatMessageDTO> messages = chatRepository.findById(query.getRoomId())
                 .map(ChatRoom::getMessages)
@@ -106,7 +149,7 @@ public class ChatService {
         loggingService.logEvent("GetMessages",
                 "Fetched history for room " + query.getRoomId());
 
-        metricsCollector.recordLatency("getMessages.latency", System.currentTimeMillis() - start);
+        getMessagesLatency.record(System.nanoTime() - start, TimeUnit.NANOSECONDS);
 
         return messages;
     }

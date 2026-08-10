@@ -1,26 +1,38 @@
 package com.chatapp.chatsystemlayered.infrastructure.websocket;
 
-import com.chatapp.chatsystemlayered.domain.chat.Message;
-import com.chatapp.chatsystemlayered.presentation.dto.ChatMessageDTO;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.web.socket.*;
+import org.springframework.web.socket.handler.TextWebSocketHandler;
+
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 @Component
-public class WebSocketHandler {
+public class WebSocketHandler extends TextWebSocketHandler {
 
-    private final SimpMessagingTemplate messagingTemplate;
+    private final List<WebSocketSession> sessions = new CopyOnWriteArrayList<>();
 
-    public WebSocketHandler(SimpMessagingTemplate messagingTemplate) {
-        this.messagingTemplate = messagingTemplate;
+    @Override
+    public void afterConnectionEstablished(WebSocketSession session) {
+        sessions.add(session);
+        System.out.println("Connected: " + session.getId());
     }
 
-    public void broadcastToRoom(String roomId, Message message) {
-        ChatMessageDTO dto = new ChatMessageDTO(
-                roomId,
-                message.getSenderId(),
-                message.getContent().getText(),
-                message.getTimestamp().toEpochMilli()
-        );
-        messagingTemplate.convertAndSend("/topic/rooms/" + roomId, dto);
+    @Override
+    public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
+        sessions.remove(session);
+        System.out.println("Disconnected: " + session.getId());
+    }
+
+    @Override
+    protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
+        System.out.println("Received: " + message.getPayload());
+
+        // Broadcast to all connected clients
+        for (WebSocketSession s : sessions) {
+            if (s.isOpen()) {
+                s.sendMessage(message);
+            }
+        }
     }
 }
