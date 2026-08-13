@@ -33,14 +33,14 @@ public class MessagingService {
         this.messagingTemplate = messagingTemplate;
 
         // Latency timer for message delivery
-        this.deliverMessageLatency = Timer.builder("chat.deliverMessage.latency")
+        this.deliverMessageLatency = Timer.builder("chat_deliverMessage_latency_seconds")
                 .description("Latency for delivering messages to WebSocket clients")
                 .publishPercentileHistogram()
                 .publishPercentiles(0.5, 0.95, 0.99)
                 .register(meterRegistry);
 
         // WebSocket session gauge
-        Gauge.builder("chat.websocket.sessions", activeSessions::size)
+        Gauge.builder("chat_websocket_sessions", activeSessions::size)
                 .description("Number of active WebSocket sessions")
                 .register(meterRegistry);
     }

@@ -44,28 +44,28 @@ public class ChatService {
         this.loggingService = loggingService;
 
         // Timers
-        this.joinRoomLatency = Timer.builder("chat.joinRoom.latency")
+        this.joinRoomLatency = Timer.builder("chat_joinRoom_latency_seconds")
                 .publishPercentileHistogram()
                 .publishPercentiles(0.5, 0.95, 0.99)
                 .register(meterRegistry);
 
-        this.leaveRoomLatency = Timer.builder("chat.leaveRoom.latency")
+        this.leaveRoomLatency = Timer.builder("chat_leaveRoom_latency_seconds")
                 .publishPercentileHistogram()
                 .publishPercentiles(0.5, 0.95, 0.99)
                 .register(meterRegistry);
 
-        this.sendMessageLatency = Timer.builder("chat.sendMessage.latency")
+        this.sendMessageLatency = Timer.builder("chat_sendMessage_latency_seconds")
                 .publishPercentileHistogram()
                 .publishPercentiles(0.5, 0.95, 0.99)
                 .register(meterRegistry);
 
-        this.getMessagesLatency = Timer.builder("chat.getMessages.latency")
+        this.getMessagesLatency = Timer.builder("chat_getMessages_latency_seconds")
                 .publishPercentileHistogram()
                 .publishPercentiles(0.5, 0.95, 0.99)
                 .register(meterRegistry);
 
         // Throughput counter
-        this.messageThroughput = Counter.builder("chat.message.throughput")
+        this.messageThroughput = Counter.builder("chat_message_throughput_total")
                 .description("Number of messages processed")
                 .register(meterRegistry);
     }
