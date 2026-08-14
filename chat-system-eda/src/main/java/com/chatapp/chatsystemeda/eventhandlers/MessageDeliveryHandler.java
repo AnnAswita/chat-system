@@ -12,8 +12,7 @@ import org.springframework.web.socket.WebSocketSession;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.*;
 
 @Component
 public class MessageDeliveryHandler {
@@ -22,6 +21,9 @@ public class MessageDeliveryHandler {
     private final ObjectMapper mapper;
     private final EventPublisher eventPublisher;
     private final EdaMetrics metrics;
+
+    //  Dedicated thread pool for WebSocket broadcast
+    private final ExecutorService broadcastPool = Executors.newFixedThreadPool(32);
 
     public MessageDeliveryHandler(ObjectMapper mapper,
                                   EventPublisher eventPublisher,
@@ -50,17 +52,17 @@ public class MessageDeliveryHandler {
             try {
                 String json = mapper.writeValueAsString(event);
 
-                int deliveredCount = 0;
-
-                // ⭐ REQUIRED: synchronous WebSocket I/O
+                // Broadcast asynchronously — no blocking inside Kafka listener
                 for (WebSocketSession session : sessions.values()) {
                     if (session.isOpen()) {
-                        session.sendMessage(new TextMessage(json));
-                        deliveredCount++;
+                        broadcastPool.submit(() -> {
+                            try {
+                                session.sendMessage(new TextMessage(json));
+                                metrics.incrementBroadcastDeliveries(1);
+                            } catch (Exception ignored) {}
+                        });
                     }
                 }
-
-                metrics.incrementBroadcastDeliveries(deliveredCount);
                 metrics.recordDeliveryLatency(0.000001);
 
             } catch (Exception e) {
@@ -68,7 +70,7 @@ public class MessageDeliveryHandler {
             }
         }
 
-        // ⭐ SAFE: async Kafka publish
+        // Publish MessageDeliveredEvent asynchronously
         CompletableFuture.runAsync(() -> {
             MessageDeliveredEvent deliveredEvent = new MessageDeliveredEvent(
                     event.getMessageId(),

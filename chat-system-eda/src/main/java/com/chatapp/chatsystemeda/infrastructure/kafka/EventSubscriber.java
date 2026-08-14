@@ -6,6 +6,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
 @Component
 public class EventSubscriber {
 
@@ -16,6 +19,9 @@ public class EventSubscriber {
     private final LoggingHandler loggingHandler;
     private final HistoryPersistenceHandler historyPersistenceHandler;
 
+    //  Dedicated thread pool for async event handling
+    private final ExecutorService eventExecutor = Executors.newFixedThreadPool(16);
+
     public EventSubscriber(
             ObjectMapper objectMapper,
             MessageDeliveryHandler messageDeliveryHandler,
@@ -23,49 +29,60 @@ public class EventSubscriber {
             LoggingHandler loggingHandler,
             HistoryPersistenceHandler historyPersistenceHandler
     ) {
-        this.objectMapper = objectMapper; // <-- use Spring-managed mapper
+        this.objectMapper = objectMapper;
         this.messageDeliveryHandler = messageDeliveryHandler;
         this.presenceHandler = presenceHandler;
         this.loggingHandler = loggingHandler;
         this.historyPersistenceHandler = historyPersistenceHandler;
     }
 
-    @KafkaListener(topics = "MessageSentEvent", groupId = "chat-consumers")
+    // CONCURRENCY ADDED
+    @KafkaListener(topics = "MessageSentEvent", groupId = "chat-consumers", concurrency = "8")
     public void onMessageSent(String payload) throws Exception {
         MessageSentEvent event = objectMapper.readValue(payload, MessageSentEvent.class);
         loggingHandler.onAnyEvent(payload);
-        messageDeliveryHandler.onMessageSent(event);
+
+        //OFFLOAD heavy work to thread pool
+        eventExecutor.submit(() -> {
+            messageDeliveryHandler.onMessageSent(event);
+        });
     }
 
-    @KafkaListener(topics = "MessageDeliveredEvent", groupId = "chat-consumers")
+    @KafkaListener(topics = "MessageDeliveredEvent", groupId = "chat-consumers", concurrency = "4")
     public void onMessageDelivered(String payload) throws Exception {
         MessageDeliveredEvent event = objectMapper.readValue(payload, MessageDeliveredEvent.class);
         loggingHandler.onAnyEvent(payload);
-        historyPersistenceHandler.onMessageDelivered(event);
+
+        eventExecutor.submit(() -> {
+            historyPersistenceHandler.onMessageDelivered(event);
+        });
     }
 
-    @KafkaListener(topics = "UserAuthenticatedEvent", groupId = "chat-consumers")
+    @KafkaListener(topics = "UserAuthenticatedEvent", groupId = "chat-consumers", concurrency = "4")
     public void onUserAuthenticated(String payload) throws Exception {
         UserAuthenticatedEvent event = objectMapper.readValue(payload, UserAuthenticatedEvent.class);
         loggingHandler.onAnyEvent(payload);
     }
 
-    @KafkaListener(topics = "UserJoinedRoomEvent", groupId = "chat-consumers")
+    @KafkaListener(topics = "UserJoinedRoomEvent", groupId = "chat-consumers", concurrency = "4")
     public void onUserJoinedRoom(String payload) throws Exception {
         UserJoinedRoomEvent event = objectMapper.readValue(payload, UserJoinedRoomEvent.class);
         loggingHandler.onAnyEvent(payload);
     }
 
-    @KafkaListener(topics = "UserLeftRoomEvent", groupId = "chat-consumers")
+    @KafkaListener(topics = "UserLeftRoomEvent", groupId = "chat-consumers", concurrency = "4")
     public void onUserLeftRoom(String payload) throws Exception {
         UserLeftRoomEvent event = objectMapper.readValue(payload, UserLeftRoomEvent.class);
         loggingHandler.onAnyEvent(payload);
     }
 
-    @KafkaListener(topics = "PresenceUpdatedEvent", groupId = "chat-consumers")
+    @KafkaListener(topics = "PresenceUpdatedEvent", groupId = "chat-consumers", concurrency = "4")
     public void onPresenceUpdated(String payload) throws Exception {
         PresenceUpdatedEvent event = objectMapper.readValue(payload, PresenceUpdatedEvent.class);
         loggingHandler.onAnyEvent(payload);
-        presenceHandler.onPresenceUpdated(event);
+
+        eventExecutor.submit(() -> {
+            presenceHandler.onPresenceUpdated(event);
+        });
     }
 }
