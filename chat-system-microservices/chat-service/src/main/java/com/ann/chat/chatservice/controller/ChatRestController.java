@@ -9,7 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import java.util.List;
 
 @RestController
-@RequestMapping("/chat")
+@RequestMapping("/api")
 public class ChatRestController {
 
     private final ChatMessageRepository repo;
@@ -21,13 +21,18 @@ public class ChatRestController {
         this.repo = repo;
     }
 
-    @PostMapping("/send")
-    public ChatMessage sendViaRest(@RequestBody ChatMessage message) {
+    @PostMapping("/messages")
+    public ChatMessage saveMessage(@RequestBody ChatMessage message) {
+
+//        metrics.incrementMessageThroughput();
+//        metrics.recordDeliveryLatency(() -> {});
+
         return repo.save(message);
     }
 
-    @GetMapping("/{room}")
+    @GetMapping("/messages/{room}")
     public List<ChatMessage> history(@PathVariable String room) {
         return repo.findByRoom(room);
     }
 }
+

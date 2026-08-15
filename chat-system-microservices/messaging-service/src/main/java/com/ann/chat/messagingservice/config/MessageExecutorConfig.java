@@ -12,9 +12,9 @@ public class MessageExecutorConfig {
     @Bean(name = "messageExecutor")
     public Executor messageExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(50);
-        executor.setMaxPoolSize(200);
-        executor.setQueueCapacity(5000);
+        executor.setCorePoolSize(200);
+        executor.setMaxPoolSize(500);
+        executor.setQueueCapacity(20000);
         executor.setThreadNamePrefix("msg-deliver-");
         executor.initialize();
         return executor;

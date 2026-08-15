@@ -19,6 +19,8 @@ public class MetricsConfig {
     private final SimpUserRegistry userRegistry;
 
     private Counter messageThroughput;
+    private Timer restCallLatency;
+    private Timer kafkaPublishLatency;
     private Timer deliveryLatency;
     private AtomicInteger activeSessions = new AtomicInteger(0);
     public MetricsConfig(MeterRegistry registry, SimpUserRegistry userRegistry) {
@@ -38,7 +40,15 @@ public class MetricsConfig {
         messageThroughput = Counter.builder("chat_message_throughput_total")
                 .description("Total messages sent through WebSocket")
                 .register(registry);
-
+        // Microservice communication latency (Messaging → Chat-Service)
+        restCallLatency = Timer.builder("rest_call_latency_seconds")
+                .publishPercentileHistogram()
+                .description("Latency of REST call to chat-service")
+                .register(registry);
+        kafkaPublishLatency = Timer.builder("kafka_publish_latency_seconds")
+                .publishPercentileHistogram()
+                .description("Latency of publishing message to Kafka")
+                .register(registry);
         // Delivery Latency Histogram
         deliveryLatency = Timer.builder("chat_deliverMessage_latency_seconds")
                 .publishPercentileHistogram()
@@ -69,6 +79,15 @@ public class MetricsConfig {
 
     public void recordDeliveryLatency(Runnable deliveryLogic) {
         deliveryLatency.record(deliveryLogic);
+    }
+    // Microservice REST latency
+    public void recordRestCallLatency(Runnable logic) {
+        restCallLatency.record(logic);
+    }
+
+    // Kafka publish latency
+    public void recordKafkaPublishLatency(Runnable logic) {
+        kafkaPublishLatency.record(logic);
     }
 }
 

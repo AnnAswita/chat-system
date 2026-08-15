@@ -15,6 +15,19 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.H2Dialect
 
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: messaging-service
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
   websocket:
     message-size-limit: 65536        # 64 KB
     send-time-limit: 15000           # 15 seconds
